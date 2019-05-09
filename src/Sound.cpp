@@ -1,7 +1,7 @@
 // hamfax -- an application for sending and receiving amateur radio facsimiles
 // Copyright (C) 2001,2002
 // Christof Schmitt, DH1CS <cschmitt@users.sourceforge.net>
-//  
+//
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; either version 2
@@ -11,7 +11,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//  
+//
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -30,7 +30,7 @@
 #include "log.h"
 
 Sound::Sound(QObject* parent)
-	: QObject(parent), sampleRate(8000), 
+	: QObject(parent), sampleRate(8000),
 	  use_alsa(1),
 #ifdef USE_ALSA
 	  pcm(NULL), handler(NULL), frames(512), framesize(sizeof(short)),
@@ -39,7 +39,7 @@ Sound::Sound(QObject* parent)
 	  dsp(-1), notifier(0), rateF(1)
 {
 	char *pszSr = getenv("DEF_RATE");
-	int nsr; 
+	int nsr;
 
 	if (pszSr && sscanf (pszSr, "%d", &nsr) == 1) {
 
@@ -58,7 +58,8 @@ Sound::~Sound(void)
 	}
 #ifdef USE_ALSA
 	if (pcm) {
-		snd_pcm_drain(pcm);
+		// snd_pcm_drain(pcm);
+		snd_pcm_drop(pcm)
 		snd_pcm_close(pcm);
 		pcm=NULL;
 	}
@@ -154,7 +155,7 @@ int Sound::startOutput(void)
 	        int rc = snd_pcm_open(&pcm, devDSPName.toLatin1(),
 				      SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
 	        if (rc<0) throw Error(tr("could not open ALSA sound device"));
-	        
+
 	        // allocate parameters and fill with defaults
 	        snd_pcm_hw_params_alloca(&hwparams);
 	        snd_pcm_hw_params_any(pcm, hwparams);
@@ -199,7 +200,7 @@ int Sound::startOutput(void)
 		snd_pcm_start(pcm);
 	     } else {
 #endif /* USE_ALSA */
-		
+
 		dsp = open(devDSPName.toLatin1(), O_WRONLY | O_NONBLOCK);
 		if(dsp == -1) {
 			throw Error(tr("could not open dsp device"));
@@ -248,7 +249,7 @@ int Sound::startInput(void)
 	     else {
 	        use_alsa=0;
 	     }
-			
+
 #ifdef USE_ALSA
 	     if (use_alsa) {
 	        snd_pcm_hw_params_t *hwparams=NULL;
@@ -259,7 +260,7 @@ int Sound::startInput(void)
 				      SND_PCM_STREAM_CAPTURE,
 				      SND_PCM_ASYNC | SND_PCM_NONBLOCK);
 	        if (rc<0) throw Error(tr("could not open ALSA:default"));
-	        
+
 	        // allocate parameters and fill with defaults
 	        snd_pcm_hw_params_alloca(&hwparams);
 	        snd_pcm_hw_params_any(pcm, hwparams);
@@ -267,7 +268,7 @@ int Sound::startInput(void)
 		/* Interleaved mode */
 		snd_pcm_hw_params_set_access(pcm, hwparams,
 			SND_PCM_ACCESS_RW_INTERLEAVED);
-		
+
 		/* Signed 16-bit little-endian format */
 		snd_pcm_hw_params_set_format(pcm, hwparams,
 			SND_PCM_FORMAT_S16_LE);
@@ -302,7 +303,7 @@ int Sound::startInput(void)
 		// - only call back when there's a decent chunk of data
 		snd_pcm_sw_params_set_avail_min(pcm, swparams, frames);
 		snd_pcm_sw_params(pcm, swparams);
-		
+
 //		doing this seems to crash things - looks like
 //		the parameter blocks are supposed to exist for
 //		the life of the pcm.
@@ -310,10 +311,10 @@ int Sound::startInput(void)
 //		snd_pcm_sw_params_free(swparams);
 
 		buffer=(short *)malloc(frames * framesize);
-		
+
 		setupNotifiers(SLOT(readALSA(int)));
 		snd_pcm_start(pcm);
-		
+
 	     } else {
 #endif /* USE_ALSA */
 		dsp = open(devDSPName.toLatin1(), O_RDONLY | O_NONBLOCK);
@@ -332,7 +333,7 @@ int Sound::startInput(void)
 			throw Error(tr("could not set mono mode"));
 		}
 		ioctl(dsp,SNDCTL_DSP_SPEED,&speed);
-	     
+
 	        if(speed<(sampleRate*0.99) || speed>(sampleRate*1.01)) {
 	        	throw Error(tr("could not set sample rate"));
 		}
@@ -355,9 +356,11 @@ int Sound::startInput(void)
 void Sound::end(void)
 {
 #ifdef USE_ALSA
-	if (pcm) snd_pcm_drain(pcm);
+	// if (pcm) snd_pcm_drain(pcm);
+	if (pcm) snd_pcm_drop(pcm);
+
 #endif /* USE_ALSA */
-	
+
 	if(notifier) {
 		notifier->setEnabled(false);
 		if(notifier->type()==QSocketNotifier::Read) {
@@ -459,7 +462,7 @@ void Sound::readALSA(int fd)
 	      }
 	   snd_pcm_start(pcm);
 	}
-	  
+
 	if(n>0 && n<=(int)frames) {
 		emit data(buffer,n);
 	}
@@ -481,7 +484,7 @@ void Sound::checkSpace(int fd)
 			snd_pcm_recover(pcm, -EPIPE, 0);
 		else if (revents & POLLOUT)
 			  emit spaceLeft(snd_pcm_avail_update(pcm));
-	} else 
+	} else
 #endif /* USE_ALSA */
 	if (dsp!=-1) {
 	  audio_buf_info info;
